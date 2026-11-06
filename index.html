@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Style Sprint: Catwalk Choices</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;background:#1a0b2e;overflow:hidden;font-family:"Trebuchet MS","Segoe UI",Verdana,sans-serif}
+  #wrap{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+  #game{display:block;background:#2a1145;touch-action:none;max-width:100vw;max-height:100vh}
+  .hudbtn{position:absolute;top:10px;z-index:5;width:44px;height:44px;border-radius:50%;border:2px solid #ffd166;
+    background:rgba(20,8,40,.85);color:#ffd166;font-size:20px;font-weight:bold;cursor:pointer;line-height:1}
+  .hudbtn:active{transform:scale(.92)}
+  #btnPause{right:12px}
+  #btnMute{right:64px}
+  #hint{position:absolute;bottom:6px;left:0;right:0;text-align:center;color:#cbb8e8;font-size:11px;z-index:4;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="480" height="800"></canvas>
+  <button class="hudbtn" id="btnMute" title="Mute / unmute (M)">&#9834;</button>
+  <button class="hudbtn" id="btnPause" title="Pause (P)">II</button>
+  <div id="hint">Tap / click a card &nbsp;•&nbsp; Keys 1 / 2 choose &nbsp;•&nbsp; P pause &nbsp;•&nbsp; M mute</div>
+</div>
+<script>
+"use strict";
+/* =====================================================================
+   Style Sprint: Catwalk Choices — an ORIGINAL game.
+   Mechanics only inspired by the generic "choice runner" idea:
+   run a track, pick one of two outfit pieces at each gate, then the
+   assembled look is judged on a catwalk against a rival stylist.
+   All titles, characters, art, music, themes and outfit designs are
+   original, drawn procedurally on canvas. No external assets.
+   ===================================================================== */
+const cv=document.getElementById('game'), ctx=cv.getContext('2d');
+const W=480, H=800;
+
+/* ---------------- Data: 20 original themes ---------------- */
+const THEMES=[
+ {name:"Beach Bash",      hint:"Sun, sand and sea breeze", hat:"Sun Hat",       top:"Hibiscus Tee",   bottom:"Board Shorts",  shoes:"Sandals",      col:"#ff9f43", col2:"#00cec9"},
+ {name:"Winter Gala",     hint:"Snowflakes and silver",   hat:"Knit Beanie",    top:"Snow Sweater",   bottom:"Wool Trousers", shoes:"Snow Boots",   col:"#74b9ff", col2:"#dfe6e9"},
+ {name:"Neon Night",      hint:"Glow under the city lights", hat:"Glow Cap",    top:"Neon Jacket",   bottom:"Glow Jeans",   shoes:"Light Sneakers",col:"#e84393", col2:"#00ffcc"},
+ {name:"Retro 80s",       hint:"Big hair, bigger colours", hat:"Headband",      top:"Retro Windbreaker",bottom:"Acid Jeans", shoes:"High-Tops",    col:"#fd79a8", col2:"#fdcb6e"},
+ {name:"Royal Ball",      hint:"Crowns, silk and ceremony", hat:"Gold Crown",   top:"Velvet Gown Top",bottom:"Silk Skirt",  shoes:"Glass Slippers",col:"#fdcb6e", col2:"#6c5ce7"},
+ {name:"Sports Day",      hint:"Fast, bright and ready to run", hat:"Sport Cap",top:"Team Jersey",  bottom:"Track Shorts", shoes:"Running Shoes",col:"#00b894", col2:"#ff7675"},
+ {name:"Garden Party",    hint:"Petals, pastels and tea", hat:"Flower Crown",  top:"Floral Blouse", bottom:"Pleated Skirt", shoes:"Ballet Flats", col:"#55efc4", col2:"#fab1a0"},
+ {name:"Space Cadet",     hint:"Stars, chrome and zero gravity", hat:"Astro Helmet",top:"Chrome Suit", bottom:"Moon Pants",  shoes:"Moon Boots",   col:"#a29bfe", col2:"#dfe6e9"},
+ {name:"Desert Trek",     hint:"Dust, sun and sturdy gear", hat:"Explorer Hat", top:"Khaki Shirt",  bottom:"Cargo Shorts", shoes:"Hiking Boots", col:"#e17055", col2:"#fdcb6e"},
+ {name:"Rainy Day",       hint:"Puddles, umbrellas and cheer", hat:"Rain Hood", top:"Yellow Raincoat",bottom:"Rain Trousers",shoes:"Rain Boots",  col:"#ffeaa7", col2:"#0984e3"},
+ {name:"Pirate Cove",     hint:"Treasure maps and sea shanties", hat:"Pirate Hat", top:"Striped Shirt",bottom:"Sailor Pants",shoes:"Deck Boots",   col:"#d63031", col2:"#2d3436"},
+ {name:"Candy Pop",       hint:"Sugar, sprinkles and pink", hat:"Candy Bow",    top:"Bubblegum Top",bottom:"Sprinkle Skirt",shoes:"Candy Sneakers",col:"#ff7675", col2:"#ffeaa7"},
+ {name:"Mountain Lodge",  hint:"Pine, plaid and warm fires", hat:"Trapper Hat", top:"Plaid Flannel",bottom:"Denim Jeans", shoes:"Lodge Boots",  col:"#e17055", col2:"#636e72"},
+ {name:"Disco Fever",     hint:"Mirror balls and funky beats", hat:"Afro Pick", top:"Sequin Top",   bottom:"Bell Bottoms", shoes:"Platform Shoes",col:"#fdcb6e", col2:"#e84393"},
+ {name:"Cherry Blossom",  hint:"Soft pink petals in spring", hat:"Blossom Pin", top:"Kimono Top",   bottom:"Pleated Skirt",shoes:"Tabi Flats",  col:"#fd79a8", col2:"#dfe6e9"},
+ {name:"Jungle Beat",     hint:"Leaves, drums and wild prints", hat:"Leaf Crown",  top:"Safari Vest",  bottom:"Khaki Shorts",shoes:"Jungle Boots", col:"#00b894", col2:"#fdcb6e"},
+ {name:"Midnight Masquerade",hint:"Masks, mystery and velvet", hat:"Feather Mask", top:"Velvet Cape Top",bottom:"Lace Skirt",shoes:"Heeled Boots", col:"#6c5ce7", col2:"#fdcb6e"},
+ {name:"Skate Park",      hint:"Concrete, wheels and attitude", hat:"Snapback",    top:"Graffiti Hoodie",bottom:"Ripped Jeans",shoes:"Skate Shoes",  col:"#ff7675", col2:"#74b9ff"},
+ {name:"Autumn Harvest",  hint:"Pumpkins, leaves and cosy knits", hat:"Knit Beret", top:"Harvest Sweater",bottom:"Corduroy Pants",shoes:"Ankle Boots",col:"#e17055", col2:"#fdcb6e"},
+ {name:"Grand Finale: Starlight", hint:"Everything sparkles — the ultimate look", hat:"Star Tiara", top:"Starlight Gown",bottom:"Glitter Skirt",shoes:"Crystal Heels",col:"#fdcb6e", col2:"#e84393"},
+];
+/* Off-theme filler pieces (drawn from other themes, so a wrong pick is visibly off-theme) */
+const FILLER={
+ hat:["Wool Beanie","Baseball Cap","Party Hat","Top Hat","Bandana"],
+ top:["Plain Tee","Denim Jacket","Hoodie","Tank Top","Blazer"],
+ bottom:["Jeans","Shorts","Leggings","Skirt","Trousers"],
+ shoes:["Sneakers","Boots","Sandals","Loafers","Trainers"]};
+const SLOTS=["hat","top","bottom","shoes"];
+const SLOT_LABEL={hat:"HAT",top:"TOP",bottom:"BOTTOM",shoes:"SHOES"};
+
+/* ---------------- Game state ---------------- */
+let state="menu";           // menu | howto | gate | feedback | catwalk | levelEnd | gameover | win
+let level=1, score=0, lives=3, stars=0;
+let gateIdx=0, outfit={}, gates=[], gateTime=0, gateLimit=9, feedback="", feedbackPts=0, feedbackT=0;
+let rivalScore=0, playerScore=0, catwalkT=0, runPhase=0, trackOff=0;
+let paused=false, muted=false, best=0;
+let buttons=[];             // clickable rects for current screen {x,y,w,h,action,data}
+let confetti=[];
+try{ best=parseInt(localStorage.getItem('styleSprintBest')||'0')||0; }catch(e){}
+
+function buildGates(){
+  const t=THEMES[level-1];
+  gates=SLOTS.map(slot=>{
+    const good={slot,label:t[slot],good:true,col:t.col,col2:t.col2};
+    const pool=FILLER[slot].filter(x=>x!==t[slot]);
+    const bad={slot,label:pool[Math.floor(Math.random()*pool.length)],good:false,
+      col:"#636e72",col2:"#b2bec3"};
+    const opts=Math.random()<0.5?[good,bad]:[bad,good];
+    return {slot,opts};
+  });
+  gateIdx=0; outfit={}; gateLimit=Math.max(4, 9-(level-1)*0.25);
+  gateTime=gateLimit;
+}
+function rivalTarget(){
+  // Level 1 rival ~18/48, level 20 rival ~36/48 — fast perfect picks (max 48) can still win.
+  return Math.round(16 + level*1.05 + Math.random()*5);
+}
+function startLevel(){
+  buildGates(); state="gate"; gateTime=gateLimit; playerScore=0;
+}
+function startGame(){
+  level=1; score=0; lives=3; stars=0; startLevel(); sfx('start');
+}
+function pickOption(i){
+  if(state!=="gate"||paused) return;
+  const g=gates[gateIdx], o=g.opts[i];
+  outfit[g.slot]=o;
+  const quick=Math.max(0, Math.round(gateTime));           // up to +2 time bonus
+  const pts=o.good ? 10+Math.min(2,Math.floor(quick/4)) : 3;
+  playerScore+=pts; score+=pts;
+  feedback=o.good ? "Perfect match! +"+pts : "Off-theme... +"+pts;
+  feedbackPts=pts; feedbackT=0; state="feedback";
+  sfx(o.good?'good':'bad');
+  if(o.good) burst(240,300);
+}
+function nextAfterFeedback(){
+  gateIdx++;
+  if(gateIdx>=gates.length){ startCatwalk(); }
+  else { state="gate"; gateTime=gateLimit; }
+}
+function startCatwalk(){
+  rivalScore=rivalTarget(); catwalkT=0; state="catwalk"; sfx('catwalk');
+}
+function finishCatwalk(){
+  const won=playerScore>=rivalScore;
+  if(won){ stars++; score+=20; sfx('win'); burst(240,200); burst(120,300); burst(360,300); }
+  else { lives--; sfx('lose'); }
+  state="levelEnd"; catwalkT=0; window.__lastWon=won;
+}
+function nextLevel(){
+  if(lives<=0){ state="gameover"; saveBest(); return; }
+  if(window.__lastWon){
+    if(level>=20){ state="win"; saveBest(); sfx('win'); return; }
+    level++; startLevel();
+  } else {
+    startLevel(); // retry same level
+  }
+}
+function saveBest(){ if(score>best){ best=score; try{localStorage.setItem('styleSprintBest',String(best));}catch(e){} } }
+
+/* ---------------- Audio: original synth music + SFX ---------------- */
+let AC=null, musicTimer=null, musicStep=0;
+function audio(){ if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(AC&&AC.state==="suspended") AC.resume(); return AC; }
+const MELODY=[523,659,784,880,784,659,587,659, 523,659,784,1047,880,784,659,587];
+const BASS=[131,131,175,196, 131,131,175,196];
+function tone(f,dur,type,vol,when){
+  if(muted||!audio()) return;
+  const t=AC.currentTime+(when||0), o=AC.createOscillator(), g=AC.createGain();
+  o.type=type||"sine"; o.frequency.value=f;
+  g.gain.setValueAtTime(vol||0.15,t); g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+dur+0.02);
+}
+function sfx(kind){
+  if(muted) return; audio(); if(!AC) return;
+  if(kind==='good'){ tone(660,.12,"sine",.2); tone(880,.18,"sine",.2,.09); }
+  else if(kind==='bad'){ tone(220,.2,"triangle",.18); tone(165,.25,"triangle",.15,.08); }
+  else if(kind==='click'){ tone(440,.06,"square",.1); }
+  else if(kind==='start'){ [523,659,784].forEach((f,i)=>tone(f,.15,"sine",.18,i*.09)); }
+  else if(kind==='win'){ [523,659,784,1047,1319].forEach((f,i)=>tone(f,.22,"sine",.2,i*.1)); }
+  else if(kind==='lose'){ [392,330,262,196].forEach((f,i)=>tone(f,.22,"triangle",.16,i*.12)); }
+  else if(kind==='catwalk'){ [784,988,1175].forEach((f,i)=>tone(f,.15,"sine",.15,i*.08)); }
+}
+function startMusic(){
+  if(musicTimer||!audio()) return;
+  musicTimer=setInterval(()=>{
+    if(muted||paused||!AC) return;
+    const m=MELODY[musicStep%MELODY.length], b=BASS[Math.floor(musicStep/2)%BASS.length];
+    tone(m,.22,"triangle",.07); if(musicStep%2===0) tone(b,.3,"sine",.12);
+    musicStep++;
+  },240);
+}
+function toggleMute(){ muted=!muted; document.getElementById('btnMute').textContent=muted?"✕":"♪"; }
+
+/* ---------------- Drawing helpers ---------------- */
+function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function text(str,x,y,size,col,align,weight){
+  ctx.fillStyle=col||"#fff"; ctx.font=(weight||"bold")+" "+size+"px 'Trebuchet MS',Verdana,sans-serif";
+  ctx.textAlign=align||"center"; ctx.textBaseline="middle"; ctx.fillText(str,x,y);
+}
+function button(x,y,w,h,label,sub,fill){
+  ctx.fillStyle=fill||"#e84393"; rr(x,y,w,h,16); ctx.fill();
+  ctx.strokeStyle="#ffd166"; ctx.lineWidth=3; ctx.stroke();
+  text(label,x+w/2,y+(sub?h/2-10:h/2),24,"#fff");
+  if(sub) text(sub,x+w/2,y+h/2+14,13,"#ffeaa7");
+  buttons.push({x,y,w,h,action:label});
+}
+function burst(x,y){ for(let i=0;i<24;i++) confetti.push({x,y,vx:(Math.random()-.5)*6,vy:-Math.random()*6-2,c:["#ffd166","#e84393","#00cec9","#55efc4","#fd79a8"][i%5],s:4+Math.random()*5,life:60}); }
+function drawConfetti(){
+  confetti=confetti.filter(c=>c.life>0);
+  confetti.forEach(c=>{ c.x+=c.vx; c.y+=c.vy; c.vy+=.25; c.life--; ctx.fillStyle=c.c; ctx.fillRect(c.x,c.y,c.s,c.s); });
+}
+function drawHearts(x,y,n){
+  for(let i=0;i<3;i++){ ctx.fillStyle=i<n?"#ff4757":"#555"; ctx.beginPath();
+    const cx=x+i*30, cy=y, s=9;
+    ctx.moveTo(cx,cy+s); ctx.bezierCurveTo(cx-s*1.4,cy-s*.4,cx-s*.7,cy-s*1.3,cx,cy-s*.3);
+    ctx.bezierCurveTo(cx+s*.7,cy-s*1.3,cx+s*1.4,cy-s*.4,cx,cy+s); ctx.fill(); }
+}
+
+/* ---- Procedural model: original stylised character, outfit-driven ---- */
+function drawModel(x,y,s,o,phase,flip){
+  ctx.save(); ctx.translate(x,y); ctx.scale(flip?-s:s,s);
+  const bob=Math.sin(phase)*4, legSwing=Math.sin(phase)*10;
+  // legs
+  ctx.strokeStyle="#2d3436"; ctx.lineWidth=10; ctx.lineCap="round";
+  ctx.beginPath(); ctx.moveTo(-6,150); ctx.lineTo(-6+legSwing,205); ctx.moveTo(6,150); ctx.lineTo(6-legSwing,205); ctx.stroke();
+  // shoes
+  drawShoes(o.shoes,-14,205); drawShoes(o.shoes,2,205);
+  // bottom
+  ctx.fillStyle=o.bottom?o.bottom.col:"#636e72";
+  if(o.bottom && /Skirt|Gown/.test(o.bottom.label)){ ctx.beginPath(); ctx.moveTo(-22,108); ctx.lineTo(22,108); ctx.lineTo(32,158); ctx.lineTo(-32,158); ctx.closePath(); ctx.fill(); }
+  else { rr(-22,108,44,52,8); ctx.fill(); }
+  // top / torso
+  ctx.fillStyle=o.top?o.top.col:"#e84393"; rr(-24,52,48,62,14); ctx.fill();
+  if(o.top){ ctx.fillStyle=o.top.col2; ctx.fillRect(-24,52,48,10); }
+  // arms
+  ctx.strokeStyle="#f1c27d"; ctx.lineWidth=9;
+  ctx.beginPath(); ctx.moveTo(-22,62); ctx.lineTo(-34,104+Math.sin(phase)*4); ctx.moveTo(22,62); ctx.lineTo(34,104-Math.sin(phase)*4); ctx.stroke();
+  // head
+  ctx.fillStyle="#f1c27d"; ctx.beginPath(); ctx.arc(0,28+bob*.3,22,0,7); ctx.fill();
+  ctx.fillStyle="#2d3436"; ctx.beginPath(); ctx.arc(-7,26,3,0,7); ctx.arc(7,26,3,0,7); ctx.fill();
+  ctx.strokeStyle="#d63031"; ctx.lineWidth=2.5; ctx.beginPath(); ctx.arc(0,36,7,0.15*Math.PI,0.85*Math.PI); ctx.stroke();
+  // hair
+  ctx.fillStyle="#6c2bd9"; ctx.beginPath(); ctx.arc(0,16,22,Math.PI,0); ctx.fill();
+  ctx.fillRect(-22,14,8,26); ctx.fillRect(14,14,8,26);
+  // hat
+  drawHat(o.hat);
+  ctx.restore();
+}
+function drawHat(h){
+  if(!h) return; const c=h.col, c2=h.col2;
+  ctx.fillStyle=c; ctx.strokeStyle=c2; ctx.lineWidth=2;
+  if(/Crown|Tiara/.test(h.label)){ ctx.beginPath(); ctx.moveTo(-18,8); ctx.lineTo(-18,-10); ctx.lineTo(-9,0); ctx.lineTo(0,-14); ctx.lineTo(9,0); ctx.lineTo(18,-10); ctx.lineTo(18,8); ctx.closePath(); ctx.fill(); ctx.fillStyle="#fff"; ctx.fillRect(-3,-6,6,6); }
+  else if(/Beanie|Beret/.test(h.label)){ ctx.beginPath(); ctx.arc(0,4,21,Math.PI,0); ctx.fill(); ctx.fillStyle=c2; ctx.fillRect(-21,2,42,6); }
+  else if(/Cap|Snapback|Sport/.test(h.label)){ ctx.beginPath(); ctx.arc(0,4,20,Math.PI,0); ctx.fill(); ctx.fillRect(0,2,26,7); }
+  else if(/Hat|Helmet|Hood|Trapper|Explorer/.test(h.label)){ ctx.beginPath(); ctx.ellipse(0,6,26,7,0,0,7); ctx.fill(); ctx.fillRect(-13,-14,26,20); }
+  else if(/Flower|Leaf|Blossom|Bow|Mask|Pick|Pin/.test(h.label)){ for(let i=0;i<5;i++){ const a=i/5*Math.PI*2; ctx.beginPath(); ctx.arc(Math.cos(a)*14,2+Math.sin(a)*6,6,0,7); ctx.fill(); } ctx.fillStyle="#ffd166"; ctx.beginPath(); ctx.arc(0,2,6,0,7); ctx.fill(); }
+  else { ctx.beginPath(); ctx.arc(0,2,19,Math.PI,0); ctx.fill(); }
+}
+function drawShoes(sh,dx,dy){
+  ctx.save(); ctx.translate(dx,dy);
+  ctx.fillStyle=sh?sh.col:"#fff";
+  if(sh && /Heel|Slipper|Crystal/.test(sh.label)){ ctx.fillRect(0,-6,14,8); ctx.fillRect(10,0,4,10); }
+  else if(sh && /Boot/.test(sh.label)){ ctx.fillRect(0,-18,13,20); ctx.fillRect(0,-4,18,6); }
+  else { rr(0,-8,20,10,4); ctx.fill(); }
+  ctx.restore();
+}
+/* Mini outfit preview icon on a gate card */
+function drawMiniIcon(slot,o,x,y){
+  ctx.save(); ctx.translate(x,y);
+  if(slot==="hat"){ ctx.fillStyle=o.col; ctx.beginPath(); ctx.arc(0,0,16,Math.PI,0); ctx.fill(); ctx.fillRect(-16,-2,32,5); }
+  if(slot==="top"){ ctx.fillStyle=o.col; rr(-18,-12,36,26,8); ctx.fill(); ctx.fillStyle=o.col2; ctx.fillRect(-18,-12,36,6); }
+  if(slot==="bottom"){ ctx.fillStyle=o.col; rr(-16,-10,32,22,6); ctx.fill(); }
+  if(slot==="shoes"){ ctx.fillStyle=o.col; rr(-18,-4,36,10,4); ctx.fill(); }
+  ctx.restore();
+}
+
+/* ---------------- Screens ---------------- */
+function drawBG(t){
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,"#2a1145"); g.addColorStop(.6,"#4a1d6e"); g.addColorStop(1,"#1a0b2e");
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // sparkles
+  ctx.fillStyle="rgba(255,209,102,.5)";
+  for(let i=0;i<20;i++){ const sx=(i*97)%W, sy=(i*61+Math.floor(runPhase*20))%H; ctx.fillRect(sx,sy,3,3); }
+  if(t){ ctx.fillStyle=t.col; ctx.globalAlpha=.12; ctx.fillRect(0,0,W,H); ctx.globalAlpha=1; }
+}
+function drawTopBar(){
+  ctx.fillStyle="rgba(0,0,0,.35)"; ctx.fillRect(0,0,W,54);
+  text("STYLE SPRINT",110,20,18,"#ffd166","left");
+  text("Lv "+level+"/20",110,40,13,"#fff","left");
+  text("Score "+score,300,27,16,"#fff");
+  drawHearts(198,40,lives); // under the title, clear of the DOM pause/mute buttons
+  if(best>0) text("Best "+best,300,44,11,"#cbb8e8");
+}
+function drawMenu(){
+  drawBG(); buttons=[];
+  text("STYLE SPRINT",W/2,120,44,"#ffd166"); text("Catwalk Choices",W/2,162,26,"#fff");
+  drawModel(W/2,262,1.15,{hat:{label:"Gold Crown",col:"#fdcb6e",col2:"#fff"},top:{label:"Velvet Gown Top",col:"#e84393",col2:"#fdcb6e"},bottom:{label:"Silk Skirt",col:"#6c5ce7",col2:"#fff"},shoes:{label:"Glass Slippers",col:"#dfe6e9",col2:"#fff"}},runPhase);
+  text("Pick the perfect look at every gate,",W/2,540,17,"#fff");
+  text("then out-score your rival on the catwalk!",W/2,566,17,"#fff");
+  if(best>0) text("Best score: "+best,W/2,596,15,"#ffd166");
+  button(90,630,300,60,"START GAME","20 levels • 3 lives");
+  button(90,706,300,52,"HOW TO PLAY",null,"#6c5ce7");
+  drawConfetti();
+}
+function drawHowto(){
+  drawBG(); buttons=[];
+  text("HOW TO PLAY",W/2,80,32,"#ffd166");
+  const lines=[
+    "1. Your model sprints down the track.",
+    "2. At each gate, TAP one of two outfit",
+    "    pieces — hat, top, bottom, shoes.",
+    "3. Match the level theme for +10 pts;",
+    "    off-theme pieces only score +3.",
+    "4. Pick fast for a time bonus!",
+    "5. On the catwalk, beat your rival's",
+    "    score to clear the level.",
+    "6. Lose a catwalk = lose a life.",
+    "    Lose all 3 lives = game over.",
+    "Keys: 1 / 2 choose • P pause • M mute"];
+  lines.forEach((l,i)=>text(l,W/2,150+i*34,16,"#fff"));
+  button(90,640,300,56,"GOT IT!",null,"#00b894");
+}
+function drawGate(){
+  const t=THEMES[level-1], g=gates[gateIdx];
+  drawBG(t); buttons=[];
+  // track
+  ctx.fillStyle="#3d1a5c"; ctx.fillRect(0,430,W,150);
+  ctx.fillStyle="#ffd166";
+  for(let i=0;i<8;i++){ const x=((i*70+trackOff)%560)-40; ctx.fillRect(x,500,34,6); }
+  drawTopBar();
+  text("LEVEL "+level+" — "+t.name.toUpperCase(),W/2,84,22,"#fff");
+  text(t.hint,W/2,110,14,"#ffeaa7");
+  text("GATE "+(gateIdx+1)+" of 4 — Choose the "+SLOT_LABEL[g.slot],W/2,140,16,"#ffd166");
+  // progress + timer
+  ctx.fillStyle="#00000066"; rr(40,160,400,12,6); ctx.fill();
+  ctx.fillStyle="#00cec9"; rr(40,160,400*((gateIdx)/4),12,6); ctx.fill();
+  ctx.fillStyle="#00000066"; rr(40,180,400,10,5); ctx.fill();
+  ctx.fillStyle=gateTime<3?"#ff4757":"#ffd166"; rr(40,180,400*(gateTime/gateLimit),10,5); ctx.fill();
+  text(Math.ceil(gateTime)+"s",W/2,206,14,"#fff");
+  // runner
+  drawModel(W/2,250,0.85,outfit,runPhase);
+  // option cards
+  g.opts.forEach((o,i)=>{
+    const x=30+i*225, y=600, w=195, h=130;
+    ctx.fillStyle=o.good?"rgba(0,206,201,.18)":"rgba(255,255,255,.08)";
+    rr(x,y,w,h,16); ctx.fill(); ctx.strokeStyle=o.col; ctx.lineWidth=3; ctx.stroke();
+    drawMiniIcon(g.slot,o,x+w/2,y+42);
+    text(o.label,x+w/2,y+92,16,"#fff");
+    text("Tap to wear",x+w/2,y+114,12,"#cbb8e8");
+    buttons.push({x,y,w,h,action:"pick",data:i});
+  });
+  text("1 = left card      2 = right card",W/2,762,13,"#cbb8e8");
+}
+function drawFeedback(){
+  drawGateBackgroundOnly();
+  const t=THEMES[level-1];
+  drawTopBar();
+  text(feedbackPts>=10?"PERFECT MATCH!":"OFF-THEME",W/2,300,34,feedbackPts>=10?"#00cec9":"#ff7675");
+  text(feedback,W/2,350,22,"#fff");
+  text("Theme: "+t.name+" — "+t.hint,W/2,390,15,"#ffeaa7");
+  drawModel(W/2,430,0.9,outfit,runPhase);
+  text("Tap anywhere to continue",W/2,700,15,"#cbb8e8");
+  drawConfetti();
+  buttons=[{x:0,y:0,w:W,h:H,action:"continue"}];
+}
+function drawGateBackgroundOnly(){
+  const t=THEMES[level-1]; drawBG(t);
+  ctx.fillStyle="#3d1a5c"; ctx.fillRect(0,430,W,150);
+}
+function drawCatwalk(){
+  drawBG(THEMES[level-1]); buttons=[];
+  drawTopBar();
+  text("THE CATWALK",W/2,84,28,"#ffd166");
+  text("Level "+level+" — "+THEMES[level-1].name,W/2,114,15,"#fff");
+  // runway
+  ctx.fillStyle="#e84393"; rr(40,560,400,90,12); ctx.fill();
+  ctx.fillStyle="#ffd166"; for(let i=0;i<9;i++) ctx.fillRect(60+i*42,600,22,5);
+  // rival (left, grey-ish outfit) vs player (right)
+  const rivalOutfit={hat:{label:"Plain Cap",col:"#636e72",col2:"#b2bec3"},top:{label:"Plain Tee",col:"#636e72",col2:"#b2bec3"},bottom:{label:"Jeans",col:"#57606f",col2:"#b2bec3"},shoes:{label:"Sneakers",col:"#b2bec3",col2:"#636e72"}};
+  const sway=Math.sin(catwalkT*3)*6;
+  drawModel(140+sway,330,0.95,rivalOutfit,catwalkT*2);
+  drawModel(340-sway,330,0.95,outfit,catwalkT*2);
+  text("RIVAL",140,250,16,"#ff7675"); text("YOU",340,250,16,"#00cec9");
+  const shown=Math.min(playerScore, Math.floor(catwalkT*30));
+  const rShown=Math.min(rivalScore, Math.floor(catwalkT*30));
+  text("Score: "+shown,340,690,20,"#fff"); text("Score: "+rShown,140,690,20,"#fff");
+  if(catwalkT>1.6){
+    text(shown>=rShown?"You are winning!":"Rival is ahead...",W/2,730,17,shown>=rShown?"#00cec9":"#ff7675");
+    text("Tap to see the result",W/2,760,13,"#cbb8e8");
+    buttons=[{x:0,y:0,w:W,h:H,action:"finishCatwalk"}];
+  }
+  drawConfetti();
+}
+function drawLevelEnd(){
+  drawBG(THEMES[level-1]); buttons=[];
+  const won=window.__lastWon;
+  text(won?"LEVEL CLEAR!":"RIVAL WINS",W/2,180,38,won?"#00cec9":"#ff7675");
+  text("Your score "+playerScore+"  vs  Rival "+rivalScore,W/2,240,20,"#fff");
+  text(won?"+20 bonus points!":"You lost a life — try the look again!",W/2,280,16,"#ffeaa7");
+  text("Total score: "+score+"   •   Lives: "+lives+"   •   Stars: "+stars,W/2,320,16,"#fff");
+  drawModel(W/2,380,1.0,outfit,runPhase);
+  if(won) drawConfetti();
+  if(lives<=0){ text("No lives left!",W/2,620,18,"#ff4757"); button(90,650,300,60,"SEE RESULTS",null,"#e84393"); }
+  else if(won && level>=20){ button(90,650,300,60,"FINALE!",null,"#00b894"); }
+  else button(90,650,300,60,won?"NEXT LEVEL":"RETRY LEVEL",null,won?"#00b894":"#e84393");
+}
+function drawGameover(){
+  drawBG(); buttons=[]; saveBest();
+  text("GAME OVER",W/2,200,40,"#ff4757");
+  text("The rival took the crown this time.",W/2,260,17,"#fff");
+  text("Score: "+score+"   •   Reached level "+level+" / 20",W/2,300,18,"#ffd166");
+  text("Best: "+best,W/2,330,16,"#fff");
+  button(90,560,300,60,"PLAY AGAIN",null,"#00b894");
+  button(90,636,300,52,"MENU",null,"#6c5ce7");
+}
+function drawWin(){
+  drawBG(); buttons=[]; saveBest();
+  text("YOU DID IT!",W/2,150,42,"#ffd166");
+  text("Style Sprint Champion!",W/2,200,22,"#fff");
+  text("All 20 themes conquered.",W/2,236,17,"#ffeaa7");
+  drawModel(W/2,300,1.2,{hat:{label:"Star Tiara",col:"#fdcb6e",col2:"#e84393"},top:{label:"Starlight Gown",col:"#fdcb6e",col2:"#e84393"},bottom:{label:"Glitter Skirt",col:"#e84393",col2:"#fdcb6e"},shoes:{label:"Crystal Heels",col:"#dfe6e9",col2:"#fdcb6e"}},runPhase);
+  text("Final score: "+score+"   •   Stars: "+stars+" / 20",W/2,580,19,"#fff");
+  text("Best: "+best,W/2,612,16,"#cbb8e8");
+  button(90,650,300,60,"PLAY AGAIN",null,"#00b894");
+  drawConfetti();
+}
+function drawPaused(){
+  ctx.fillStyle="rgba(10,4,24,.8)"; ctx.fillRect(0,0,W,H);
+  text("PAUSED",W/2,340,40,"#ffd166");
+  text("Tap Resume or press P",W/2,390,16,"#fff");
+  buttons=[{x:140,y:430,w:200,h:56,action:"resume"}];
+  ctx.fillStyle="#00b894"; rr(140,430,200,56,14); ctx.fill(); text("RESUME",W/2,458,22,"#fff");
+}
+
+/* ---------------- Main loop ---------------- */
+let last=0;
+function loop(ts){
+  requestAnimationFrame(loop);
+  const dt=Math.min(0.5,(ts-last)/1000||0.016); last=ts; // 0.5s clamp: game time tracks
+  // real time even on very slow devices / throttled headless frames
+  runPhase+=dt*6; trackOff+=dt*90;
+  if(!paused){
+    if(state==="gate"){ gateTime-=dt; if(gateTime<=0){ outfit[gates[gateIdx].slot]={slot:gates[gateIdx].slot,label:"(too slow)",good:false,col:"#636e72",col2:"#b2bec3"}; feedback="Too slow! +0"; feedbackPts=0; feedbackT=0; state="feedback"; sfx('bad'); } }
+    if(state==="feedback"){ feedbackT+=dt; if(feedbackT>1.4) nextAfterFeedback(); }
+    if(state==="catwalk"){ catwalkT+=dt; }
+    if(state==="levelEnd"){ /* wait for tap */ }
+  }
+  ctx.clearRect(0,0,W,H);
+  if(state==="menu") drawMenu();
+  else if(state==="howto") drawHowto();
+  else if(state==="gate") drawGate();
+  else if(state==="feedback") drawFeedback();
+  else if(state==="catwalk") drawCatwalk();
+  else if(state==="levelEnd") drawLevelEnd();
+  else if(state==="gameover") drawGameover();
+  else if(state==="win") drawWin();
+  if(paused && state!=="menu" && state!=="howto") drawPaused();
+}
+
+/* ---------------- Input ---------------- */
+function handleAction(b){
+  if(!b) return;
+  audio(); startMusic(); sfx('click');
+  if(b.action==="START GAME") startGame();
+  else if(b.action==="HOW TO PLAY") state="howto";
+  else if(b.action==="GOT IT!") state="menu";
+  else if(b.action==="pick") pickOption(b.data);
+  else if(b.action==="continue") nextAfterFeedback();
+  else if(b.action==="finishCatwalk") finishCatwalk();
+  else if(b.action==="NEXT LEVEL"||b.action==="RETRY LEVEL"||b.action==="SEE RESULTS"||b.action==="FINALE!") nextLevel();
+  else if(b.action==="PLAY AGAIN") startGame();
+  else if(b.action==="MENU") state="menu";
+  else if(b.action==="resume") paused=false;
+}
+/* Hit-testing is computed from the CURRENT state at click time, never from
+   the last rendered frame's button list — so a slow frame can never make a
+   tap land on a stale button. */
+function hitTest(x,y){
+  const inR=(r)=>x>=r[0]&&x<=r[0]+r[2]&&y>=r[1]&&y<=r[1]+r[3];
+  if(paused) return inR([140,430,200,56])?{action:"resume"}:null;
+  if(state==="menu") return inR([90,630,300,60])?{action:"START GAME"}:inR([90,706,300,52])?{action:"HOW TO PLAY"}:null;
+  if(state==="howto") return inR([90,640,300,56])?{action:"GOT IT!"}:null;
+  if(state==="gate") return inR([30,600,195,130])?{action:"pick",data:0}:inR([255,600,195,130])?{action:"pick",data:1}:null;
+  if(state==="feedback") return {action:"continue"};
+  if(state==="catwalk") return catwalkT>1.6?{action:"finishCatwalk"}:null;
+  if(state==="levelEnd") return inR([90,650,300,60])?{action:"NEXT LEVEL"}:null;
+  if(state==="gameover") return inR([90,560,300,60])?{action:"PLAY AGAIN"}:inR([90,636,300,52])?{action:"MENU"}:null;
+  if(state==="win") return inR([90,650,300,60])?{action:"PLAY AGAIN"}:null;
+  return null;
+}
+function canvasPos(e){
+  const r=cv.getBoundingClientRect();
+  const cx=(e.touches?e.touches[0].clientX:e.clientX), cy=(e.touches?e.touches[0].clientY:e.clientY);
+  return {x:(cx-r.left)*W/r.width, y:(cy-r.top)*H/r.height};
+}
+cv.addEventListener('pointerdown',e=>{
+  e.preventDefault();
+  const p=canvasPos(e);
+  handleAction(hitTest(p.x,p.y));
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='m'||e.key==='M'){ toggleMute(); return; }
+  if(e.key==='p'||e.key==='P'){ if(state!=="menu"&&state!=="howto") paused=!paused; return; }
+  if(paused) return;
+  if(state==="gate"&&(e.key==='1'||e.key==='ArrowLeft')) pickOption(0);
+  else if(state==="gate"&&(e.key==='2'||e.key==='ArrowRight')) pickOption(1);
+  else if((state==="menu")&&e.key==='Enter') startGame();
+  else if(state==="feedback"&&e.key==='Enter') nextAfterFeedback();
+  else if(state==="catwalk"&&e.key==='Enter'&&catwalkT>1.6) finishCatwalk();
+});
+document.getElementById('btnPause').addEventListener('click',()=>{ if(state!=="menu"&&state!=="howto") paused=!paused; });
+document.getElementById('btnMute').addEventListener('click',()=>{ audio(); toggleMute(); });
+
+/* Test hooks (used by the headless test script, harmless in play) */
+window.__game={get state(){return state},get level(){return level},get score(){return score},
+  get lives(){return lives},get gateIdx(){return gateIdx},get playerScore(){return playerScore},
+  get rivalScore(){return rivalScore},get paused(){return paused},get muted(){return muted},
+  get outfit(){return outfit}, get themes(){return THEMES.length}, get gates(){return gates},
+  get catwalkT(){return catwalkT},
+  start:startGame, pick:pickOption};
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
